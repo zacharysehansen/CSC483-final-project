@@ -1,0 +1,124 @@
+# CSC383 Final Project: music comparison A la SHAZAM
+
+## Student: Zachary Hansen (zacharysehansen)
+
+This guide explains how to set up and run our audio fingerprinting web application, which is inspired by Shazam's technology. The application consists of both frontend and backend components, with the backend running on the University of Arizona's Lectura server.
+
+### Key Files:
+- `app.py`: Frontend Flask server
+- `backend_server.py`: Backend server for fingerprint processing and song identification
+- `frontend_fingerprinting.py`: Script to generate fingerprints from audio files
+- `search_bar.py`: Script to build the prefix tree for the search functionality
+- `merge_tracks.py`: Script to clean and prepare the dataset
+- `backend/data/`: Directory containing fingerprint data structures
+
+## Setup and Configuration
+
+### Prerequisites
+
+1. Install the required Python packages:
+```bash
+pip install -r requirements.txt
+```
+
+2. Download the FMA metadata CSV files and the FMA MP3 audio files from the [FMA GitHub repository](https://github.com/mdeff/fma).  
+   - Download the metadata CSV files (such as `tracks.csv`, and `raw_tracks.csv`) from the [FMA releases page](https://github.com/mdeff/fma#download).
+   - Download the FMA audio files (e.g., `fma_small.zip`, `fma_medium.zip`, or `fma_large.zip`) from the same page.
+   - Extract all downloaded files and **place them into the `data/` directory** in your project.
+
+3. Make sure you have access to University of Arizona's Lectura server.
+
+### Data Preparation
+
+First, you need to prepare the dataset:
+
+1. Run `merge_tracks.py` to clean up the dataset into a usable form:
+```bash
+python merge_tracks.py
+```
+
+This script processes the FMA dataset and creates `tracks_merged.csv` with the following columns:
+- `song_id`: Unique identifier for the song
+- `song_name`: Name of the song
+- `album`: Album name
+- `artist`: Artist name
+- `genre`: Music genre
+- `album_id`: Album identifier
+- `track_id`: Track identifier
+- `track_image_file`: Path to album art
+- `file_location`: Path to fingerprint file
+
+Note: A copy of this CSV is already available on the Lectura server.
+
+### Setting Up SSH Tunnel to Lectura
+
+To connect to the backend services on Lectura:
+
+```bash
+ssh -L 8080:localhost:5000 zacharysehansen@lec.cs.arizona.edu -N
+```
+
+This command creates an SSH tunnel that forwards your local port 8080 to port 5000 on the Lectura server. If you need the password, you are more than welcoem to contact me directly.
+
+**Note:** The backend server on Lectura will be running for the next few days. If you encounter any issues connecting to it, please let me know, and I will restart it as soon as possible.
+
+### Building the Audio Fingerprint Database
+
+1. Run `frontend_fingerprinting.py` with the `--process` flag to generate fingerprints for all audio files:
+
+```bash
+python frontend_fingerprinting.py --process
+```
+
+This script loads audio files from the FMA dataset, extracts spectral features using the STFT (Short-Time Fourier Transform), identifies frequency peaks in each time frame, creates fingerprints by pairing these peaks with future peaks, organizes fingerprints by frequency bands, and sends the fingerprints to the backend server.
+
+2. On the backend, run `search_bar.py` to build the prefix tree for search functionality:
+
+```bash
+python search_bar.py
+```
+
+This builds a Trie data structure that enables prefix-based searching of songs in the database.
+
+### Running the Application
+
+1. Start the backend server on Lectura:
+
+```bash
+python backend_server.py
+```
+
+2. Run the frontend Flask application:
+
+```bash
+python app.py
+```
+
+3. Open a web browser and navigate to `http://localhost:5000`
+
+
+### Audio Fingerprinting
+
+Our audio fingerprinting technique is based on the approach described in the Shazam paper by Wang (2003): "An Industrial-Strength Audio Search Algorithm" (https://www.ee.columbia.edu/~dpwe/papers/Wang03-shazam.pdf).
+
+The audio fingerprinting process consists of four key steps: first, we convert the audio into a spectrogram using Short-Time Fourier Transform (STFT) for spectral analysis; second, we identify frequency peaks within each time frame; third, we create hash fingerprints by pairing peaks that occur close together in time; and finally, we organize these fingerprints by frequency bands to enable efficient searching.
+
+### Data Structures
+
+Three main data structures power the backend:
+The backend leverages three main data structures:
+BK-Trees for efficient approximate matching of audio fingerprints across frequency bands, 
+
+Prefix Tree that enables efficient search bar functionality with instant suggestions 
+
+Fingerprint CSV Files that store processed audio fingerprints with hash values and time offsets organized by frequency bands for quick lookup and persistent storage.
+
+### Resources
+
+Our implementation was informed by:
+- [Toptal article on audio fingerprinting](https://www.toptal.com/algorithms/shazam-it-music-processing-fingerprinting-and-recognition)
+- [FMA (Free Music Archive) dataset](https://github.com/mdeff/fma)
+- [FMA usage notebook](https://nbviewer.org/github/mdeff/fma/blob/outputs/usage.ipynb)
+- [The Shazam paper by Wang](https://www.ee.columbia.edu/~dpwe/papers/Wang03-shazam.pdf)
+
+## Enjoy using the application!
