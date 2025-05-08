@@ -41,13 +41,13 @@ class Trie:
             self._dfs(child_node, prefix + char, result)
 
 def main():
-    AUDIO_DIR = os.path.join('data', 'fma_small')
+    AUDIO_DIR = os.path.join('backend', 'fma_metadata')
     BASE_DIR = os.path.join('backend', 'data', 'fingerprints')
-    SAVE_DIR = os.path.join('backend', 'data', 'structures')
+    SAVE_DIR = os.path.join('backend', 'data', 'index')
 
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    tracks_csv_path = os.path.join(AUDIO_DIR, 'merge_tracks.csv')
+    tracks_csv_path = os.path.join(AUDIO_DIR, 'tracks_merged.csv')
     try:
         tracks_df = pd.read_csv(tracks_csv_path)
         print(f"Loaded {len(tracks_df)} tracks from CSV.")
@@ -75,7 +75,12 @@ def main():
     songs_added = 0
 
     for track_id in track_ids_with_fingerprints:
-        track_rows = tracks_df[tracks_df['track_id'] == track_id]
+        # Ensure track_id is the same type as in the DataFrame
+        try:
+            track_id_int = int(track_id)
+        except ValueError:
+            continue  # skip if not a valid integer
+        track_rows = tracks_df[tracks_df['track_id'] == track_id_int]
         if not track_rows.empty:
             for _, row in track_rows.iterrows():
                 song_name = row['song_name']

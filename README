@@ -58,16 +58,16 @@ To connect to the backend services on Lectura:
 ssh -L 8080:localhost:5000 zacharysehansen@lec.cs.arizona.edu -N
 ```
 
-This command creates an SSH tunnel that forwards your local port 8080 to port 5000 on the Lectura server. If you need the password, you are more than welcoem to contact me directly.
+This command creates an SSH tunnel that forwards the local port 8080 to port 5000 on the Lectura server. If you need the password, you are more than welcoem to contact me directly.
 
 **Note:** The backend server on Lectura will be running for the next few days. If you encounter any issues connecting to it, please let me know, and I will restart it as soon as possible.
 
 ### Building the Audio Fingerprint Database
 
-1. Run `frontend_fingerprinting.py` with the `--process` flag to generate fingerprints for all audio files:
+1. Run `frontend_fingerprinting.py` to generate the audio fingerprint csv files for each track
 
 ```bash
-python frontend_fingerprinting.py --process
+python frontend_fingerprinting.py 
 ```
 
 This script loads audio files from the FMA dataset, extracts spectral features using the STFT (Short-Time Fourier Transform), identifies frequency peaks in each time frame, creates fingerprints by pairing these peaks with future peaks, organizes fingerprints by frequency bands, and sends the fingerprints to the backend server.

@@ -769,47 +769,47 @@
 
         async function performSearch() {
             const query = searchInput.value.trim();
-            
-        
+
             if (query.length === 0) {
                 searchResults.innerHTML = '';
                 searchResults.classList.remove('active');
                 return;
             }
-    
+
             searchResults.innerHTML = '<div class="search-result-item">Searching...</div>';
             searchResults.classList.add('active');
-            
+
             try {
                 const backendUrl = backendUrlInput.value.trim();
-                const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&backend_url=${encodeURIComponent(backendUrl)}`);
+                const response = await fetch(`${backendUrl}/api/search?query=${encodeURIComponent(query)}`);
                 const data = await response.json();
-                
+
                 searchResults.innerHTML = '';
-                
+
                 if (data.status === 'success' && data.results && data.results.length > 0) {
                     data.results.forEach(result => {
                         const resultItem = document.createElement('div');
                         resultItem.className = 'search-result-item';
-                        
+
                         resultItem.innerHTML = `
                             <div class="search-result-title">${result.song_name}</div>
                             <div class="search-result-info">${result.artist} • ${result.album}</div>
                             <div class="search-result-info">${result.genre}</div>
                         `;
-                        
-                        // When a result is clicked, fill the audio file path input
+
                         resultItem.addEventListener('click', function() {
-                            audioFilePathInput.value = result.file_location;
+                            const tidStr = result.track_id.toString().padStart(6, '0');
+                            let audioFile = `data/fma_small/${tidStr.slice(0, 3)}/${tidStr}.mp3`;
+                            audioFilePathInput.value = audioFile;
                             searchResults.classList.remove('active');
                         });
-                        
+
                         searchResults.appendChild(resultItem);
                     });
                 } else {
                     searchResults.innerHTML = '<div class="search-result-item">No results found</div>';
                 }
-                
+
                 searchResults.classList.add('active');
             } catch (error) {
                 searchResults.innerHTML = `<div class="search-result-item">Error: ${error.message}</div>`;
@@ -838,29 +838,6 @@
             overlay.classList.remove('active');
         });
         
-        async function saveConfig() {
-            const config = {
-                backendUrl: backendUrlInput.value,
-                duration: durationInput.value
-            };
-            
-            try {
-                const backendUrl = backendUrlInput.value.trim();
-                await fetch(`${backendUrl}/api/save_config`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(config)
-                });
-            } catch (error) {
-                console.error('Error saving config:', error);
-            }
-        }
-        
-        [backendUrlInput, durationInput].forEach(input => {
-            input.addEventListener('change', saveConfig);
-        });
         
         testConnectionBtn.addEventListener('click', async function() {
             const backendUrl = backendUrlInput.value.trim();
@@ -883,12 +860,11 @@
                 responseElem.textContent = 'Connection error:\n' + error.message;
             }
             
-            saveConfig();
         });
         
         identifyBtn.addEventListener('click', async function() {
             const audioFilePath = audioFilePathInput.value.trim();
-            const duration = durationInput.value;
+            const duration = durationInput.value || '10';
             
             if (!audioFilePath) {
                 alert('Please enter the path to an audio file.');
@@ -898,16 +874,10 @@
             identifyBtn.classList.add('listening');
             loader.style.display = 'inline-block';
             
-            await runPythonScript(audioFilePath, duration);
-            
-            saveConfig();
-        });
-        
-        async function runPythonScript(audioFilePath, duration) {
             try {
-                const backendUrl = backendUrlInput.value.trim();
+                const flaskURL = "http://localhost:5000"; 
                 
-                const response = await fetch(`${backendUrl}/api/identify`, {
+                const response = await fetch(`${flaskURL}/api/identify`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -924,17 +894,35 @@
                 
                 identifyBtn.classList.remove('listening');
                 loader.style.display = 'none';
-                
-                if (data.status === 'success' && data.identification_results) {
-                    displayResults(data.identification_results);
-                    
+
+                if (!data || Object.keys(data).length === 0) {
+                    matchResults.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--text-light);">
+                        No match found. The audio may not be in the database or could not be identified.
+                    </p>`;
+                    resultSection.classList.add('active');
+                    overlay.classList.add('active');
+                    return;
+                }
+
+                if ('track_id' in data) {
+                    matchResults.innerHTML = `
+                        <div class="match-result">
+                            <div class="match-title">Track ID: ${data.track_id}</div>
+                            <div class="match-info">Score: ${data.score}</div>
+                            <div class="match-info">Close Matches: ${data.close_matches}</div>
+                            <div class="match-info">Total Matches: ${data.total_matches}</div>
+                            <div class="match-info">Avg Time Diff: ${Number(data.avg_time_diff).toFixed(2)}s</div>
+                            <div class="match-info">Min Time Diff: ${Number(data.min_time_diff).toFixed(2)}s</div>
+                            <div class="match-info">Avg Distance: ${Number(data.avg_distance).toFixed(2)}</div>
+                            <div class="match-info">Total Query Fingerprints: ${data.total_query_fingerprints}</div>
+                        </div>
+                    `;
                     resultSection.classList.add('active');
                     overlay.classList.add('active');
                 } else {
                     matchResults.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--text-light);">
                         Error or no results: ${data.message || 'Unknown error'}
                     </p>`;
-                    
                     resultSection.classList.add('active');
                     overlay.classList.add('active');
                 }
@@ -945,11 +933,11 @@
                 matchResults.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--error-color);">
                     Error: ${error.message}
                 </p>`;
-                
+                console.log("this is the error", error);
                 resultSection.classList.add('active');
                 overlay.classList.add('active');
             }
-        }
+        });
         
         function displayResults(data) {
             matchResults.innerHTML = '';
@@ -983,82 +971,10 @@
             }
         }
         
-        function loadThemePreference() {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme) {
-                applyTheme(savedTheme);
-                if (themeToggle) {
-                    themeToggle.checked = savedTheme === 'dark';
-                }
-            } else {
-                applyTheme('light');
-                if (themeToggle) {
-                    themeToggle.checked = false;
-                }
-            }
-        }
-        
-        function applyTheme(theme) {
-            if (theme === 'dark') {
-                html.classList.add('dark-mode');
-                document.body.style.setProperty('--background-color', '#121212');
-                document.body.style.setProperty('--card-color', '#1e1e1e');
-                document.body.style.setProperty('--text-color', '#ffffff');
-                document.body.style.setProperty('--text-light', '#aaaaaa');
-                document.body.style.setProperty('--shadow-color', 'rgba(0, 0, 0, 0.3)');
-                document.body.style.setProperty('--primary-color', '#4f83ff');
-                document.body.style.setProperty('--primary-dark', '#2962ff');
-            } else {
-                html.classList.remove('dark-mode');
-                document.body.style.setProperty('--background-color', '#f9f9f9');
-                document.body.style.setProperty('--card-color', '#ffffff');
-                document.body.style.setProperty('--text-color', '#333333');
-                document.body.style.setProperty('--text-light', '#757575');
-                document.body.style.setProperty('--shadow-color', 'rgba(0, 0, 0, 0.1)');
-                document.body.style.setProperty('--primary-color', '#2962FF');
-                document.body.style.setProperty('--primary-dark', '#0039CB');
-            }
-        }
-        
-        function saveThemePreference(theme) {
-            localStorage.setItem('theme', theme);
-        }
-        
-        if (themeToggle) {
-            themeToggle.addEventListener('change', function() {
-                const newTheme = this.checked ? 'dark' : 'light';
-                applyTheme(newTheme);
-                saveThemePreference(newTheme);
-            });
-        }
-        
-        function loadFromLocalStorage() {
-            const savedConfig = localStorage.getItem('audioIdentifyConfig');
-            if (savedConfig) {
-                const config = JSON.parse(savedConfig);
-                backendUrlInput.value = config.backendUrl || 'http://localhost:8080';
-                durationInput.value = config.duration || '10';
-                audioFilePathInput.value = config.lastPath || '';
-            }
-            
-            loadThemePreference();
-        }
-        
-        function saveToLocalStorage() {
-            const config = {
-                backendUrl: backendUrlInput.value,
-                duration: durationInput.value,
-                lastPath: audioFilePathInput.value
-            };
-            localStorage.setItem('audioIdentifyConfig', JSON.stringify(config));
-        }
-        
-        [backendUrlInput, durationInput, audioFilePathInput].forEach(input => {
-            input.addEventListener('change', saveToLocalStorage);
-        });
-        
         window.addEventListener('load', function() {
-            loadFromLocalStorage();
+            backendUrlInput.value = 'http://localhost:8080';
+            durationInput.value = '10';
+            audioFilePathInput.value = '';
             testConnectionBtn.click();
         });
     </script>
