@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import librosa
 import requests
+from io import BytesIO
 from tqdm import tqdm
-import argparse
 
 import utils
 
@@ -56,7 +56,7 @@ def create_frequency_banded_fingerprints(peaks, fan_out=15):
     for i in range(len(peaks) - fan_out):
         anchor_time, anchor_freqs, anchor_mags = peaks[i]
         for af_idx, anchor_freq in enumerate(anchor_freqs):
-            anchor_mag = anchor_mags[af_idx]
+
             band_id = get_frequency_band(anchor_freq)
 
             for j in range(1, fan_out + 1):
@@ -107,15 +107,10 @@ def create_csv_from_fingerprints(fingerprints):
 def send_fingerprints_to_backend(track_id, fingerprints_df):
     try:
         csv_content = fingerprints_df.to_csv(index=False)
-        from io import StringIO, BytesIO
         csv_buffer = BytesIO(csv_content.encode('utf-8'))
         files = {'fingerprint_csv': ('fingerprint.csv', csv_buffer, 'text/csv')}
         data = {'track_id': track_id}
-        response = requests.post(
-            f"{BACKEND_URL}/api/save_fingerprints",
-            files=files,
-            data=data
-        )
+        response = requests.post(f"{BACKEND_URL}/api/save_fingerprints",files=files, data=data)
         if response.status_code == 200:
             print(f"Successfully sent fingerprints CSV for track {track_id}")
             return response.json()
@@ -152,82 +147,26 @@ def process_tracks(csv_file, limit=None):
             print(f"Error processing track {row.get('track_id', 'unknown')}: {e}")
             error_count += 1
     print(f"\nFinished processing. Success: {success_count}, Errors: {error_count}")
-
-def query_song(audio_file, duration=10):
     try:
-        x, sr = librosa.load(audio_file, sr=None, mono=True)
-        if duration:
-            samples = min(int(duration * sr), len(x))
-            x = x[:samples]
-        print(f'Query: {audio_file}')
-        print(f'Duration: {len(x) / sr:.2f}s, {len(x)} samples')
-        stft = np.abs(librosa.stft(x, n_fft=n_fft, hop_length=hop_length))
-        frequencies = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-        peaks = find_peaks(stft, frequencies, sr, n_peaks=n_peaks)
-        banded_fingerprints, all_fingerprints = create_frequency_banded_fingerprints(peaks)
-        query_fingerprints = []
-        for band_id, band_fps in banded_fingerprints.items():
-            for hash_value, timestamp, anchor_freq in band_fps:
-                query_fingerprints.append([hash_value, timestamp, anchor_freq])
-        response = requests.post(
-            f"{BACKEND_URL}/api/identify",
-            json={'fingerprints': query_fingerprints}
-        )
+        response = requests.post(f"{BACKEND_URL}/api/index/save")
         if response.status_code == 200:
-            result = response.json()
-            return result
+            print("Index saved successfully on backend.")
         else:
-            print(f"Error identifying song: {response.text}")
-            return {'status': 'error', 'message': response.text}
+            print(f"Error saving index: {response.status_code} {response.text}")
     except Exception as e:
-        print(f"Error in query_song: {e}")
-        return {'status': 'error', 'message': str(e)}
+        print(f"Exception while saving index: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Audio fingerprinting and identification')
-    parser.add_argument('--process', help='Process tracks and save fingerprints', action='store_true')
-    parser.add_argument('--identify', help='Path to audio file to identify')
-    parser.add_argument('--limit', help='Limit number of tracks to process', type=int, default=None)
-    parser.add_argument('--duration', help='Duration in seconds to analyze for identification', type=float, default=10)
-    args = parser.parse_args()
     try:
         response = requests.get(f"{BACKEND_URL}/api/test")
         if response.status_code == 200:
             print("Backend connection successful!")
         else:
             print(f"Backend connection failed: {response.status_code} {response.text}")
-            print("Make sure the backend server is running and accessible.")
             exit(1)
     except Exception as e:
         print(f"Backend connection error: {e}")
-        print("Make sure the backend server is running and accessible.")
         exit(1)
-    if args.process:
-        merged_tracks_csv = os.path.join('data', 'fma_metadata', 'tracks_merged.csv')
-        process_tracks(merged_tracks_csv, limit=args.limit)
-        try:
-            print("Rebuilding index on the backend server...")
-            response = requests.post(
-                f"{BACKEND_URL}/api/index/rebuild"
-            )
-            if response.status_code == 200:
-                print("Successfully rebuilt the BK tree index on the backend")
-            else:
-                print(f"Error rebuilding BK tree index: Status {response.status_code}, {response.text}")
-        except Exception as e:
-            print(f"Error connecting to backend to rebuild the BK tree index: {e}")
-    if args.identify:
-        result = query_song(args.identify, duration=args.duration)
-        print("\nIdentification results:")
-        if result.get('status') == 'success' and 'matches' in result:
-            matches = result['matches']
-            if matches:
-                for i, match in enumerate(matches[:5]):
-                    print(f"{i+1}. Track ID: {match['track_id']}")
-                    print(f"   Confidence: {match['confidence']*100:.2f}%")
-                    print(f"   Matched: {match['matched_count']}/{match['total_fingerprints']} fingerprints")
-                    print(f"   Time offset: {match['time_offset']}s")
-            else:
-                print("No matches found")
-        else:
-            print(f"Error: {result.get('message', 'Unknown error')}")
+    LIMIT = 100  # change this to the number of tracks you want
+    merged_tracks_csv = os.path.join('data', 'fma_metadata', 'tracks_merged.csv')
+    process_tracks(merged_tracks_csv, limit=100)
